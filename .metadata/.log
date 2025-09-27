@@ -1,0 +1,27 @@
+!SESSION 2025-09-27 14:45:40.986 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=zh_TW
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2025-09-27 14:45:53.737
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2025-09-27 14:45:53.739
+!MESSAGE Log4j2 initialized with config file C:\Users\eddyp\STM32CubeIDE\workspace_labhw\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2025-09-27 14:45:56.274
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY org.eclipse.cdt.core 1 0 2025-09-27 14:47:22.657
+!MESSAGE Indexed 'Hello' (21 sources, 80 headers) in 2.84 sec: 4,821 declarations; 22,682 references; 0 unresolved inclusions; 1 syntax errors; 2 unresolved names (0.0073%)
+
+!ENTRY org.eclipse.cdt.core 1 0 2025-09-27 14:50:21.180
+!MESSAGE Indexed 'LAB1_HW' (34 sources, 144 headers) in 2.42 sec: 15,290 declarations; 74,009 references; 9 unresolved inclusions; 1,263 syntax errors; 1,498 unresolved names (1.6%)
+
+!ENTRY com.st.stm32cube.ide.mcu.debug 4 0 2025-09-27 14:58:21.270
+!MESSAGE Error - No active DSF-Session. tmpSessionId = 2 (contextManager row 121)
+
+!ENTRY com.st.stm32cube.ide.mcu.debug 4 0 2025-09-27 14:58:21.271
+!MESSAGE Existing sessions are:
