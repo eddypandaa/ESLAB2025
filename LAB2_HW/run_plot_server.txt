@@ -1,0 +1,123 @@
+import socket
+import sys
+import threading
+import re
+from collections import deque
+
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+HOST = "0.0.0.0"
+PORT = 8002           # 要跟板子 RemotePORT 一致
+WINDOW = 300          # 畫最近 N 筆
+
+# ---- 正則：在整行中搜尋即可（不要求從開頭） ----
+ACC_RE  = re.compile(r"ACC XYZ = \[(-?\d+),\s*(-?\d+),\s*(-?\d+)\]")
+GYRO_RE = re.compile(r"GYRO dps = \[(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\]")
+
+# ---- 環形緩衝 ----
+acc_x, acc_y, acc_z = deque(maxlen=WINDOW), deque(maxlen=WINDOW), deque(maxlen=WINDOW)
+gyr_x, gyr_y, gyr_z = deque(maxlen=WINDOW), deque(maxlen=WINDOW), deque(maxlen=WINDOW)
+
+def parse_line(line: str):
+    """
+    支援：
+    1) 'ACC XYZ = [...]  GYRO dps = [...]'
+    2) 'STM32 : Panda!ACC XYZ = [...]  GYRO dps = [...]'  <-- 黏在一起也會被抓到
+    """
+    m = ACC_RE.search(line)
+    if m:
+        ax, ay, az = map(int, m.groups())
+        acc_x.append(ax); acc_y.append(ay); acc_z.append(az)
+
+    g = GYRO_RE.search(line)
+    if g:
+        gx, gy, gz = map(float, g.groups())
+        gyr_x.append(gx); gyr_y.append(gy); gyr_z.append(gz)
+
+def handle_client(conn, addr):
+    print(f"Connected from: {addr}")
+    buf = ""
+    try:
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                print("Connection closed by peer.")
+                return
+            buf += data.decode("utf-8", "replace")
+
+            # 逐行切，但如果板子沒在 Panda 後加 \n，也能在 parse_line 裡面抓到
+            while "\n" in buf:
+                line, buf = buf.split("\n", 1)
+                line = line.rstrip("\r")
+                if not line:
+                    continue
+
+                # 顯示規則
+                if line.startswith("STM32 :"):
+                    print(line)
+                elif "GYRO dps" in line:
+                    print(line)  # ACC+GYRO 同行，原樣印（中間空格）
+                else:
+                    print("RX from STM32:", line)
+
+                # 解析到圖表
+                parse_line(line)
+                sys.stdout.flush()
+
+            # 緩衝區裡最後一段也試著解析（因為可能沒有 \n，但包含 ACC/GYRO）
+            tail = buf.strip()
+            if tail:
+                parse_line(tail)
+
+    except ConnectionResetError:
+        print("Connection error: peer reset.")
+    finally:
+        conn.close()
+
+def server_loop():
+    print(f"Listening on {HOST}:{PORT} ... (plotting, reconnect-ready)")
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
+            srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            srv.bind((HOST, PORT))
+            srv.listen(1)
+            conn, addr = srv.accept()
+            with conn:
+                handle_client(conn, addr)
+            print("Waiting for next connection...")
+
+# ---- Matplotlib ----
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 6))
+
+def animate(_):
+    ax1.clear(); ax2.clear()
+
+    # ACC
+    ax1.plot(list(acc_x), label="AX")
+    ax1.plot(list(acc_y), label="AY")
+    ax1.plot(list(acc_z), label="AZ")
+    ax1.set_title("ACC XYZ (raw LSB)")
+    ax1.set_ylabel("LSB")
+    ax1.grid(True)
+    ax1.legend(loc="upper left")
+
+    # GYRO
+    ax2.plot(list(gyr_x), label="GX (dps)")
+    ax2.plot(list(gyr_y), label="GY (dps)")
+    ax2.plot(list(gyr_z), label="GZ (dps)")
+    ax2.set_title("GYRO XYZ (dps)")
+    ax2.set_ylabel("dps")
+    ax2.set_xlabel("Samples")
+    ax2.grid(True)
+    ax2.legend(loc="upper left")
+
+# 關閉幀快取，避免警告
+ani = animation.FuncAnimation(fig, animate, interval=200, cache_frame_data=False)
+
+# TCP 執行緒
+t = threading.Thread(target=server_loop, daemon=True)
+t.start()
+
+plt.tight_layout()
+plt.show()

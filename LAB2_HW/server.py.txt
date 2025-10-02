@@ -1,0 +1,51 @@
+import socket
+import sys
+
+HOST = "0.0.0.0"
+PORT = 8002  # 改成你的 RemotePORT
+
+def handle_client(conn, addr):
+    print(f"Connected from: {addr}")
+    buf = ""
+    try:
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                print("Connection closed by peer.")
+                return
+            buf += data.decode("utf-8", "replace")
+            # 逐行處理
+            while "\n" in buf:
+                line, buf = buf.split("\n", 1)
+                line = line.rstrip("\r")
+                if not line:
+                    continue
+                if line.startswith("STM32 :"):
+                    # Panda 訊息：原樣顯示
+                    print(line)
+                elif "GYRO dps" in line:
+                    # ACC + GYRO 一行，直接原樣顯示（中間空格）
+                    print(line)
+                else:
+                    # 其他訊息加前綴
+                    print("RX from STM32:", line)
+                sys.stdout.flush()
+    except ConnectionResetError:
+        print("Connection error: peer reset.")
+    finally:
+        conn.close()
+
+def main():
+    print(f"Listening on {HOST}:{PORT} ... (interactive, reconnect-ready)")
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((HOST, PORT))
+            s.listen(1)
+            conn, addr = s.accept()
+            with conn:
+                handle_client(conn, addr)
+            print("Waiting for next connection...")
+
+if __name__ == "__main__":
+    main()
