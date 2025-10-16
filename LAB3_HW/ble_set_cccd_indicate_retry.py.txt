@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+import time
+from bluepy.btle import Scanner, Peripheral, UUID, BTLEException
+
+TARGET_NAME = "iPhone"  # 改成你手機廣播名稱（如：LightBlue、BLE Scanner、你的 iPhone 名）
+CHAR_UUID   = "00002222-0000-1000-8000-00805f9b34fb"  # 0x2222
+CCCD_SHORT  = 0x2902
+
+def scan_for_mac(name_substr, timeout=4.0, tries=3):
+    for _ in range(tries):
+        devs = Scanner().scan(timeout)
+        for d in devs:
+            n = d.getValueText(9)
+            if n and name_substr.lower() in n.lower():
+                return d.addr
+    return None
+
+def try_connect(addr):
+    # 先 random，再 public 都試一次
+    for addr_type in ("random", "public"):
+        try:
+            print(f"[連線] {addr} (addrType={addr_type})")
+            p = Peripheral(addr, addrType=addr_type, iface=0)
+            return p
+        except BTLEException as e:
+            print(f"  ↳ 失敗 ({addr_type}): {e}")
+            time.sleep(0.6)
+    return None
+
+def main():
+    # 縮短從掃描到連線的時間，避免 iPhone 隨機地址過期
+    for attempt in range(1, 5):
+        print(f"[掃描] 第 {attempt} 次，找名稱包含『{TARGET_NAME}』的裝置…")
+        addr = scan_for_mac(TARGET_NAME, timeout=3.0, tries=2)
+        if not addr:
+            print("  ↳ 沒掃到，請確認手機在前景且已 Start Advertising。")
+            time.sleep(1.0)
+            continue
+
+        print(f"[找到] {addr}，立即嘗試連線…")
+        p = try_connect(addr)
+        if not p:
+            print("  ↳ 連線失敗，重新掃描/嘗試…")
+            # 建議此時在手機端 Stop/Start Advertising 一次再重跑
+            time.sleep(1.2)
+            continue
+
+        try:
+            print(f"[查找特徵] UUID = {CHAR_UUID}")
+            ch = p.getCharacteristics(uuid=UUID(CHAR_UUID))[0]
+
+            print("[查找 Descriptor] UUID = 0x2902 (CCCD)")
+            descs = ch.getDescriptors(forUUID=CCCD_SHORT)
+            if not descs:
+                print("[錯誤] 找不到 CCCD，請確認該特徵有勾 Indicate/Notify。")
+                return
+
+            cccd = descs[0]
+            print(f"[寫入] 對 handle={hex(cccd.handle)} 寫入 0x0002 (啟用 Indicate)")
+            p.writeCharacteristic(cccd.handle, b"\x02\x00", withResponse=True)
+
+            val = p.readCharacteristic(cccd.handle)
+            print(f"[驗證] 讀回 CCCD：{val.hex()}（應為 0200）")
+            print("\n[✔] 完成！請在手機 App 的 Log 截圖：Write 0x2902 = 0x02 0x00")
+            return
+        finally:
+            p.disconnect()
+
+    print("[結束] 多次嘗試後仍未成功。請：1) 手機 Stop/Start Advertising；2) 靠近；3) 確認未被其他裝置佔用；4) 改用 gatttool 測一次。")
+
+if __name__ == "__main__":
+    main()
+
